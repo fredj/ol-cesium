@@ -103,6 +103,7 @@ olcs.AbstractSynchronizer.prototype.setView_ = function(view) {
 olcs.AbstractSynchronizer.prototype.setLayers_ = function(layers) {
   if (!goog.isNull(this.olLayers)) {
     goog.array.forEach(this.olLayersListenKeys_, ol.Observable.unByKey);
+    this.destroyAll();
   }
 
   this.olLayers = layers;
@@ -112,14 +113,25 @@ olcs.AbstractSynchronizer.prototype.setLayers_ = function(layers) {
     }, this);
 
     this.olLayersListenKeys_ = [
-      layers.on('add', handleCollectionEvent_),
-      layers.on('remove', handleCollectionEvent_)
+      layers.on('add', function(event) {
+        var index = event.target.getArray().indexOf(event.element);
+        this.unusedCesiumObjects_ = {}; // hack
+        this.synchronizeSingle(event.element, index);
+      }, this),
+      layers.on('remove', function(event) {
+        var layerId = goog.getUid(event.element);
+        var cesiumObject = this.layerMap[layerId];
+        if (cesiumObject) {
+          this.destroyCesiumObject(cesiumObject);
+        }
+        delete this.layerMap[layerId];
+        // FIXME: layer goup support
+      }, this)
     ];
   } else {
     this.olLayersListenKeys_ = [];
   }
 
-  this.destroyAll();
   this.synchronize();
 };
 
@@ -134,12 +146,14 @@ olcs.AbstractSynchronizer.prototype.synchronize = function() {
   }
   this.unusedGroups_ = goog.object.clone(this.olGroupListenKeys_);
   this.unusedCesiumObjects_ = goog.object.transpose(this.layerMap);
-  this.removeAllCesiumObjects(false); // only remove, don't destroy
+//  this.removeAllCesiumObjects(false); // only remove, don't destroy
 
   this.olLayers.forEach(function(el, i, arr) {
     this.synchronizeSingle(el);
   }, this);
 
+
+  // FIXME: only on remove
   // destroy unused Cesium Objects
   goog.array.forEach(goog.object.getValues(this.unusedCesiumObjects_),
       function(el, i, arr) {
@@ -168,7 +182,7 @@ olcs.AbstractSynchronizer.prototype.synchronize = function() {
  * @param {ol.layer.Base} olLayer
  * @protected
  */
-olcs.AbstractSynchronizer.prototype.synchronizeSingle = function(olLayer) {
+olcs.AbstractSynchronizer.prototype.synchronizeSingle = function(olLayer, index) {
   if (goog.isNull(olLayer)) {
     return;
   }
@@ -230,7 +244,7 @@ olcs.AbstractSynchronizer.prototype.synchronizeSingle = function(olLayer) {
 
   // add Cesium layers
   if (goog.isDefAndNotNull(cesiumObject)) {
-    this.addCesiumObject(cesiumObject);
+    this.addCesiumObject(cesiumObject, index);
     delete this.unusedCesiumObjects_[cesiumObject];
   }
 };

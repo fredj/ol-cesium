@@ -45,6 +45,8 @@ olcs.RasterSynchronizer.prototype.addCesiumObject = function(object) {
  * @inheritDoc
  */
 olcs.RasterSynchronizer.prototype.destroyCesiumObject = function(object) {
+  this.cesiumLayers_.remove(object, false);
+  this.ourLayers_.remove(object, false);
   object.destroy();
 };
 
